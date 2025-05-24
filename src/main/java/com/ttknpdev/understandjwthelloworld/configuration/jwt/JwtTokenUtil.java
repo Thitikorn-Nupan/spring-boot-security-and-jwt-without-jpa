@@ -4,7 +4,6 @@ import com.ttknpdev.understandjwthelloworld.log.Logging;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 
-import java.io.Serializable;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -14,36 +13,34 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 
-/*
-    The JwtTokenUtil is responsible(รับผิดชอบ) for performing JWT operations
-    *** like creation and validation.
+/**
+    The JwtTokenUtil is responsible(รับผิดชอบ) for performing JWT operations *** like creation and validation.
     It makes use of the io.jsonwebtoken.Jwts for achieving this.
-// @Component
 */
 public class JwtTokenUtil { //  Serializable
+
     // private static final long serialVersionUID = -2550185165626007488L;
-    public static final long JWT_TOKEN_VALIDITY = 24 * 60 * 60 * 1000; // 24 hour
+    @Value("${jwt.validity}")
+    private Long JWT_TOKEN_VALIDITY; // 1 hour
     @Value("${jwt.secret}")
-    private String secret;
-    private Logging logging;
+    private String JWT_SECRET_KEY;
+    private final Logging logging;
 
 
     public JwtTokenUtil() {
-
         logging = new Logging(JwtTokenUtil.class);
-
     }
 
 
     // validate token
     public Boolean validateToken(String token, UserDetails userDetails) {
-        logging.logBack.info("validateToken() works");
+        logging.logBack.info("validateToken() method works");
         final String username = getUsernameFromToken(token);
         if (username.equals(userDetails.getUsername()) && !isTokenExpired(token)) {
-            logging.logBack.info("User exists");
+            logging.logBack.debug("User exists and validated");
             return true;
         } else {
-            logging.logBack.warn("User do not exists");
+            logging.logBack.debug("User do not exists");
             return false;
         }
     }
@@ -64,7 +61,7 @@ public class JwtTokenUtil { //  Serializable
     private Claims getAllClaimsFromToken(String token) {
         return Jwts
                 .parser()
-                .setSigningKey(secret)
+                .setSigningKey(JWT_SECRET_KEY)
                 .parseClaimsJws(token)
                 .getBody();
     }
@@ -85,17 +82,18 @@ public class JwtTokenUtil { //  Serializable
 
     // generate token for user
     public String generateToken(UserDetails userDetails) {
-        logging.logBack.info("generateToken() works");
+        logging.logBack.info("generateToken() method works");
         Map<String, Object> claims = new HashMap<>();
+        claims.put("username", userDetails.getUsername()); // claim
+        claims.put("roles", userDetails.getAuthorities());
         return doGenerateToken(
                 claims,
-                userDetails.getUsername()
+                userDetails.getUsername() // subject
         );
     }
+
+    // Here, the doGenerateToken() method creates a JSON Web Token
     private String doGenerateToken(Map<String, Object> claims, String subject) {
-       /*
-           Here, the doGenerateToken() method creates a JSON Web Token
-        */
         logging.logBack.info("doGenerateToken() works");
         // issue (v. ออก)
         return Jwts
@@ -103,9 +101,23 @@ public class JwtTokenUtil { //  Serializable
                 .setClaims(claims)
                 .setSubject(subject) // Subject is combination of the username
                 .setIssuedAt(new Date()) // The token is issued at the current date and time
-                .setExpiration(new Date(System.currentTimeMillis() + JWT_TOKEN_VALIDITY * 1000)) // The token should expire after 24 hours
-                .signWith(SignatureAlgorithm.HS512, secret) // The token is signed using a secret key, which you can specify in the application.properties file or from system environment variable
+                .setExpiration(new Date(System.currentTimeMillis() + JWT_TOKEN_VALIDITY)) // The token should expire after 24 hours
+                .signWith(SignatureAlgorithm.HS512, JWT_SECRET_KEY) // The token is signed using a secret key, which you can specify in the application.properties file or from system environment variable
                 .compact();
+        /*
+        payload look like
+        {
+          "sub": "Admin",
+          "roles": [
+            {
+              "authority": "ROLE_ADMIN"
+            }
+          ],
+          "exp": 1748056338,
+          "iat": 1748052738,
+          "username": "Admin"
+        }
+        */
     }
 
 }
